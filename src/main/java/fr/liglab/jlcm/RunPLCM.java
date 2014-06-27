@@ -41,6 +41,7 @@ import fr.liglab.jlcm.io.PatternsCollector;
 import fr.liglab.jlcm.io.PatternsWriter;
 import fr.liglab.jlcm.io.StdOutCollector;
 import fr.liglab.jlcm.util.MemoryPeakWatcherThread;
+import fr.liglab.jlcm.util.ProgressWatcherThread;
 
 /**
  * jLCM as a command-line utility. Invoke without arguments to print the manual.
@@ -126,7 +127,7 @@ public class RunPLCM {
 
 		PatternsCollector collector = instanciateCollector(cmd, outputPath, nbThreads);
 
-		PLCM miner = new PLCM(collector, nbThreads);
+		PLCM miner = new PLCM(collector, nbThreads, new ProgressWatcherThread());
 
 		chrono = System.currentTimeMillis();
 		miner.lcm(initState);
