@@ -1,6 +1,6 @@
 # jLCM-cli
 
-See the [main project page](http://martinkirch.github.io/jlcm/).
+See the [main project page](http://slide-lig.github.io/jlcm/).
 
 This has been separated from jLCM to avoid the dependency on commons-cli, easing the use of jLCM as a library.
 
