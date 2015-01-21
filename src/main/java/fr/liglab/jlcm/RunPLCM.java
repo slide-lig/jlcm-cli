@@ -24,6 +24,7 @@ package fr.liglab.jlcm;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -34,6 +35,9 @@ import org.apache.commons.cli.PosixParser;
 
 import fr.liglab.jlcm.internals.ExplorationStep;
 import fr.liglab.jlcm.io.AllFISConverter;
+import fr.liglab.jlcm.io.FileCollector;
+import fr.liglab.jlcm.io.FileCollectorWithIDMapper;
+import fr.liglab.jlcm.io.FileWithStringIDsIterable;
 import fr.liglab.jlcm.io.MultiThreadedFileCollector;
 import fr.liglab.jlcm.io.NullCollector;
 import fr.liglab.jlcm.io.PatternSortCollector;
@@ -65,6 +69,7 @@ public class RunPLCM {
 				false,
 				"Give peak memory usage after mining (instanciates a watcher thread that periodically triggers garbage collection)");
 		options.addOption("s", false, "Sort items in outputted patterns, in ascending order");
+		options.addOption("S", false, "Use arbitrary strings as item IDs (space-separated)");
 		options.addOption("t", true, "How many threads will be launched (defaults to your machine's processors count)");
 		options.addOption("v", false, "Enable verbose mode, which logs every extension of the empty pattern");
 		options.addOption("V", false,
@@ -109,7 +114,22 @@ public class RunPLCM {
 		}
 
 		chrono = System.currentTimeMillis();
-		ExplorationStep initState = new ExplorationStep(minsup, args[0]);
+		ExplorationStep initState;
+		Map<Integer, String> itemsIdMap = null;
+		
+		if (cmd.hasOption('S')) {
+			FileWithStringIDsIterable reader = new FileWithStringIDsIterable(args[0]);
+			initState = new ExplorationStep(minsup, reader);
+			reader.close();
+			Map<String, Integer> rawMap = reader.getMap();
+			itemsIdMap = new HashMap<Integer, String>(rawMap.size());
+			for (Entry<String, Integer> entry : rawMap.entrySet()) {
+				itemsIdMap.put(entry.getValue(), entry.getKey());
+			}
+		} else {
+			initState = new ExplorationStep(minsup, args[0]);
+		}
+		
 		long loadingTime = System.currentTimeMillis() - chrono;
 		System.err.println("Dataset loaded in " + loadingTime + "ms");
 
@@ -125,7 +145,7 @@ public class RunPLCM {
 			nbThreads = Integer.parseInt(cmd.getOptionValue('t'));
 		}
 
-		PatternsCollector collector = instanciateCollector(cmd, outputPath, nbThreads);
+		PatternsCollector collector = instanciateCollector(cmd, outputPath, nbThreads, itemsIdMap);
 
 		PLCM miner = new PLCM(collector, nbThreads, new ProgressWatcherThread());
 
@@ -151,9 +171,10 @@ public class RunPLCM {
 	 * Parse command-line arguments to instantiate the right collector
 	 * 
 	 * @param nbThreads
+	 * @param itemsIdMap can be null when not needed
 	 */
 	private static PatternsCollector instanciateCollector(CommandLine cmd, String outputPath,
-			int nbThreads) {
+			int nbThreads, Map<Integer, String> itemsIdMap) {
 
 		PatternsCollector collector = null;
 
@@ -164,7 +185,20 @@ public class RunPLCM {
 			
 			if (outputPath != null) {
 				try {
-					writer = new MultiThreadedFileCollector(outputPath, nbThreads);
+					if (nbThreads > 1) {
+						if (itemsIdMap == null) {
+							writer = new MultiThreadedFileCollector(outputPath, nbThreads);
+						} else {
+							writer = new MultiThreadedFileCollector(outputPath, nbThreads, itemsIdMap);
+						}
+					} else {
+						if (itemsIdMap == null) {
+							writer = new FileCollector(outputPath);
+						} else {
+							writer = new FileCollectorWithIDMapper(outputPath, itemsIdMap);
+						}
+					}
+					
 				} catch (IOException e) {
 					e.printStackTrace(System.err);
 					System.err.println("Aborting mining.");
